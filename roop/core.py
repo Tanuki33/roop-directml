@@ -9,6 +9,7 @@ import os
 import torch
 from pathlib import Path
 import tkinter as tk
+from tkinter import ttk
 from tkinter import filedialog
 from opennsfw2 import predict_video_frames, predict_image
 from tkinter.filedialog import asksaveasfilename
@@ -99,33 +100,44 @@ def start_processing():
 
 def preview_image(image_path):
     img = Image.open(image_path)
-    img = img.resize((180, 180), Image.ANTIALIAS)
+    img = img.resize((192, 250), Image.ANTIALIAS)
     photo_img = ImageTk.PhotoImage(img)
     left_frame = tk.Frame(window)
-    left_frame.place(x=60, y=100)
+    left_frame.place(x=10, y=30)
     img_label = tk.Label(left_frame, image=photo_img)
     img_label.image = photo_img
     img_label.pack()
 
 
 def preview_video(video_path):
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print("Error opening video file")
-        return
-    ret, frame = cap.read()
-    if ret:
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img = Image.fromarray(frame)
-        img = img.resize((180, 180), Image.ANTIALIAS)
+    if not is_img(video_path):
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print("Error opening video file")
+            return
+        ret, frame = cap.read()
+        if ret:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(frame)
+            img = img.resize((192, 250), Image.ANTIALIAS)
+            photo_img = ImageTk.PhotoImage(img)
+            right_frame = tk.Frame(window)
+            right_frame.place(x=210, y=30)
+            img_label = tk.Label(right_frame, image=photo_img)
+            img_label.image = photo_img
+            img_label.pack()
+
+        cap.release()
+    else:
+        img = Image.open(video_path)
+        img = img.resize((192, 250), Image.ANTIALIAS)
         photo_img = ImageTk.PhotoImage(img)
-        right_frame = tk.Frame(window)
-        right_frame.place(x=360, y=100)
-        img_label = tk.Label(right_frame, image=photo_img)
+        left_frame = tk.Frame(window)
+        left_frame.place(x=210, y=30)
+        img_label = tk.Label(left_frame, image=photo_img)
         img_label.image = photo_img
         img_label.pack()
 
-    cap.release()
 
 
 def select_face():
@@ -166,6 +178,7 @@ def status(string):
 
 
 def start():
+    enable_button(False)
     if not args['source_img'] or not os.path.isfile(args['source_img']):
         print("\n[WARNING] Please select an image containing a face.")
         return
@@ -187,6 +200,7 @@ def start():
             quit()
         process_img(args['source_img'], target_path, args['output_file'])
         status("swap successful!")
+        enable_button(True)
         return
     seconds, probabilities = predict_video_frames(video_path=args['target_path'], frame_interval=100)
     if any(probability > 0.85 for probability in probabilities):
@@ -218,10 +232,26 @@ def start():
     save_path = args['output_file'] if args['output_file'] else output_dir + "/" + video_name + ".mp4"
     print("\n\nVideo saved as:", save_path, "\n\n")
     status("swap successful!")
+    enable_button(True)
 
+def enable_button(state):
+    if state:
+        face_button["state"] = "normal"
+        target_button["state"] = "normal"
+        start_button["state"] = "normal"
+        all_faces_checkbox["state"] = "normal"
+        fps_checkbox["state"] = "normal"
+        frames_checkbox["state"] = "normal"
+    else:
+        face_button["state"] = "disabled"
+        target_button["state"] = "disabled"
+        start_button["state"] = "disabled"
+        all_faces_checkbox["state"] = "disabled"
+        fps_checkbox["state"] = "disabled"
+        frames_checkbox["state"] = "disabled"
 
 def run():
-    global all_faces, keep_frames, limit_fps, status_label, window
+    global all_faces, keep_frames, limit_fps, status_label, window, face_button, target_button, start_button, all_faces_checkbox, fps_checkbox, frames_checkbox
 
     pre_check()
     limit_resources()
@@ -231,45 +261,45 @@ def run():
         start()
         quit()
     window = tk.Tk()
-    window.geometry("600x700")
+    window.geometry("540x368")
     window.title("roop")
     window.configure(bg="#2d3436")
     window.resizable(width=False, height=False)
 
     # Contact information
     support_link = tk.Label(window, text="Donate to project <3", fg="#fd79a8", bg="#2d3436", cursor="hand2", font=("Arial", 8))
-    support_link.place(x=180,y=20,width=250,height=30)
+    support_link.place(x=410,y=20,width=118,height=30)
     support_link.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/sponsors/s0md3v"))
 
     # Select a face button
-    face_button = tk.Button(window, text="Select a face", command=select_face, bg="#2d3436", fg="#74b9ff", highlightthickness=4, relief="flat", highlightbackground="#74b9ff", activebackground="#74b9ff", borderwidth=4)
-    face_button.place(x=60,y=320,width=180,height=80)
+    face_button = tk.Button(window, text="Select a face", command=select_face, bg="#f1c40f", highlightthickness=4, relief="flat", highlightbackground="#74b9ff", activebackground="#74b9ff", borderwidth=4)
+    face_button.place(x=10,y=290,width=192,height=30)
 
     # Select a target button
-    target_button = tk.Button(window, text="Select a target", command=select_target, bg="#2d3436", fg="#74b9ff", highlightthickness=4, relief="flat", highlightbackground="#74b9ff", activebackground="#74b9ff", borderwidth=4)
-    target_button.place(x=360,y=320,width=180,height=80)
+    target_button = tk.Button(window, text="Select a target", command=select_target, bg="#f1c40f", highlightthickness=4, relief="flat", highlightbackground="#74b9ff", activebackground="#74b9ff", borderwidth=4)
+    target_button.place(x=210,y=290,width=192,height=30)
 
     # All faces checkbox
     all_faces = tk.IntVar()
     all_faces_checkbox = tk.Checkbutton(window, anchor="w", relief="groove", activebackground="#2d3436", activeforeground="#74b9ff", selectcolor="black", text="Process all faces in frame", fg="#dfe6e9", borderwidth=0, highlightthickness=0, bg="#2d3436", variable=all_faces, command=toggle_all_faces)
-    all_faces_checkbox.place(x=60,y=500,width=240,height=31)
+    all_faces_checkbox.place(x=410,y=200,width=120,height=25)
 
     # FPS limit checkbox
     limit_fps = tk.IntVar(None, not args['keep_fps'])
     fps_checkbox = tk.Checkbutton(window, anchor="w", relief="groove", activebackground="#2d3436", activeforeground="#74b9ff", selectcolor="black", text="Limit FPS to 30", fg="#dfe6e9", borderwidth=0, highlightthickness=0, bg="#2d3436", variable=limit_fps, command=toggle_fps_limit)
-    fps_checkbox.place(x=60,y=475,width=240,height=31)
+    fps_checkbox.place(x=410,y=220,width=120,height=25)
 
     # Keep frames checkbox
     keep_frames = tk.IntVar(None, args['keep_frames'])
     frames_checkbox = tk.Checkbutton(window, anchor="w", relief="groove", activebackground="#2d3436", activeforeground="#74b9ff", selectcolor="black", text="Keep frames dir", fg="#dfe6e9", borderwidth=0, highlightthickness=0, bg="#2d3436", variable=keep_frames, command=toggle_keep_frames)
-    frames_checkbox.place(x=60,y=450,width=240,height=31)
+    frames_checkbox.place(x=410,y=240,width=120,height=25)
 
     # Start button
-    start_button = tk.Button(window, text="Start", bg="#f1c40f", relief="flat", borderwidth=0, highlightthickness=0, command=lambda: [save_file(), start()])
-    start_button.place(x=240,y=560,width=120,height=49)
+    start_button = tk.Button(window, text="Start", bg="#f1c40f", relief="flat", borderwidth=0, highlightthickness=0, command=lambda: [save_file(), threading.Thread(target=start).start()])
+    start_button.place(x=410,y=270,width=120,height=50)
 
     # Status label
-    status_label = tk.Label(window, width=580, justify="center", text="Status: waiting for input...", fg="#2ecc71", bg="#2d3436")
-    status_label.place(x=10,y=640,width=580,height=30)
+    status_label = tk.Label(window, justify="left", text="Status: waiting for input...", fg="#2ecc71", bg="#2d3436")
+    status_label.place(x=0,y=320,width=533,height=30)
 
     window.mainloop()
