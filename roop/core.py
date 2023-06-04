@@ -1,28 +1,20 @@
-import platform
-import signal
-import sys
-import shutil
-import glob
-import argparse
-import multiprocessing as mp
-import os
+import platform, signal, sys, shutil, glob, argparse, os, webbrowser, psutil, cv2, threading
 import torch
-from pathlib import Path
 import tkinter as tk
-from tkinter import ttk
+import multiprocessing as mp
 from tkinter import filedialog
 from opennsfw2 import predict_video_frames, predict_image
 from tkinter.filedialog import asksaveasfilename
-import webbrowser
-import psutil
-import cv2
-import threading
+from pathlib import Path
+from datetime import datetime
 from PIL import Image, ImageTk
 
 import roop.globals
 from roop.swapper import process_video, process_img
 from roop.utils import is_img, detect_fps, set_fps, create_video, add_audio, extract_frames, rreplace
 from roop.analyser import get_face_single
+
+run_at = datetime.now()
 
 if 'ROCMExecutionProvider' in roop.globals.providers:
     del torch
@@ -102,14 +94,13 @@ def preview_image(image_path):
     img = Image.open(image_path)
     img = img.resize((192, 250), Image.ANTIALIAS)
     photo_img = ImageTk.PhotoImage(img)
-    left_frame = tk.Frame(window)
-    left_frame.place(x=10, y=30)
-    img_label = tk.Label(left_frame, image=photo_img)
-    img_label.image = photo_img
-    img_label.pack()
+    left_img_label.configure(image=photo_img)
+    left_img_label.image = photo_img
+    img.close()
 
 
 def preview_video(video_path):
+    img = None
     if not is_img(video_path):
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
@@ -119,25 +110,14 @@ def preview_video(video_path):
         if ret:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(frame)
-            img = img.resize((192, 250), Image.ANTIALIAS)
-            photo_img = ImageTk.PhotoImage(img)
-            right_frame = tk.Frame(window)
-            right_frame.place(x=210, y=30)
-            img_label = tk.Label(right_frame, image=photo_img)
-            img_label.image = photo_img
-            img_label.pack()
-
         cap.release()
     else:
         img = Image.open(video_path)
-        img = img.resize((192, 250), Image.ANTIALIAS)
-        photo_img = ImageTk.PhotoImage(img)
-        left_frame = tk.Frame(window)
-        left_frame.place(x=210, y=30)
-        img_label = tk.Label(left_frame, image=photo_img)
-        img_label.image = photo_img
-        img_label.pack()
-
+    img = img.resize((192, 250), Image.ANTIALIAS)
+    photo_img = ImageTk.PhotoImage(img)
+    right_img_label.configure(image=photo_img)
+    right_img_label.image = photo_img
+    img.close()
 
 
 def select_face():
@@ -251,7 +231,9 @@ def enable_button(state):
         frames_checkbox["state"] = "disabled"
 
 def run():
-    global all_faces, keep_frames, limit_fps, status_label, window, face_button, target_button, start_button, all_faces_checkbox, fps_checkbox, frames_checkbox
+    global all_faces, keep_frames, limit_fps, status_label, window, face_button, target_button, start_button
+    global all_faces_checkbox, fps_checkbox, frames_checkbox, left_img_label, right_img_label
+
 
     pre_check()
     limit_resources()
@@ -266,10 +248,29 @@ def run():
     window.configure(bg="#2d3436")
     window.resizable(width=False, height=False)
 
+    # Load image placeholder
+    img = Image.open("./nopreview.jpg")
+    img = img.resize((192, 250), Image.ANTIALIAS)
+    photo_img = ImageTk.PhotoImage(img)
+
     # Contact information
     support_link = tk.Label(window, text="Donate to project <3", fg="#fd79a8", bg="#2d3436", cursor="hand2", font=("Arial", 8))
     support_link.place(x=410,y=20,width=118,height=30)
     support_link.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/sponsors/s0md3v"))
+
+    # Face Image Window
+    left_frame = tk.Frame(window)
+    left_frame.place(x=10, y=30)
+    left_img_label = tk.Label(left_frame, image=photo_img)
+    left_img_label.pack()
+
+    # Target Image Window
+    right_frame = tk.Frame(window)
+    right_frame.place(x=210, y=30)
+    right_img_label = tk.Label(right_frame, image=photo_img)
+    right_img_label.pack()
+
+    img.close()
 
     # Select a face button
     face_button = tk.Button(window, text="Select a face", command=select_face, bg="#f1c40f", highlightthickness=4, relief="flat", highlightbackground="#74b9ff", activebackground="#74b9ff", borderwidth=4)
@@ -299,7 +300,8 @@ def run():
     start_button.place(x=410,y=270,width=120,height=50)
 
     # Status label
-    status_label = tk.Label(window, justify="left", text="Status: waiting for input...", fg="#2ecc71", bg="#2d3436")
-    status_label.place(x=0,y=320,width=533,height=30)
+    startup_time = int((datetime.now()-run_at).total_seconds() * 1000)
+    status_label = tk.Label(window, justify="center", text=f"Status: waiting for input...\nStartup time {startup_time}ms", fg="#2ecc71", bg="#2d3436")
+    status_label.place(x=0,y=320,width=540,height=30)
 
     window.mainloop()
