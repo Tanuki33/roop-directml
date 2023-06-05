@@ -2,14 +2,15 @@ import tkinter as tk
 from typing import Any, Callable, Tuple
 from PIL import Image, ImageTk
 import webbrowser
+from datetime import datetime
 from tkinter import filedialog
 from tkinter.filedialog import asksaveasfilename
 import threading
 
 from roop.utils import is_img
 
-max_preview_size = 800
-
+run_at = datetime.now()
+max_preview_size = 640
 
 def create_preview(parent):
     global preview_image_frame, preview_frame_slider, test_button
@@ -211,19 +212,19 @@ def open_preview_window(get_video_frame, target_path):
 
 def preview_face(path):
     img = Image.open(path)
-    img = img.resize((180, 180), Image.ANTIALIAS)
+    img = img.resize((192, 250), Image.ANTIALIAS)
     photo_img = ImageTk.PhotoImage(img)
     face_label.configure(image=photo_img)
     face_label.image = photo_img
-
+    img.close()
 
 def preview_target(frame):
     img = Image.fromarray(frame)
-    img = img.resize((180, 180), Image.ANTIALIAS)
+    img = img.resize((192, 250), Image.ANTIALIAS)
     photo_img = ImageTk.PhotoImage(img)
     target_label.configure(image=photo_img)
     target_label.image = photo_img
-
+    img.close()
 
 def update_status_label(value):
     status_label["text"] = value
@@ -245,7 +246,7 @@ def init(
     global window, preview, preview_visible, face_label, target_label, status_label
 
     window = tk.Tk()
-    window.geometry("600x700")
+    window.geometry("570x368")
     window.title("roop")
     window.configure(bg="#2d3436")
     window.resizable(width=False, height=False)
@@ -254,62 +255,74 @@ def init(
     target_path = tk.StringVar()
     frames_amount = tk.IntVar()
 
+    # Load image placeholder
+    img = Image.open("./nopreview.jpg")
+    img = img.resize((192, 250), Image.ANTIALIAS)
+    photo_img = ImageTk.PhotoImage(img)
+
     # Preview window
     preview = create_preview(window)
 
     # Contact information
-    support_link = tk.Label(window, text="Donate to project <3", fg="#fd79a8", bg="#2d3436", cursor="hand2", font=("Arial", 8))
-    support_link.place(x=180,y=20,width=250,height=30)
+    support_link = tk.Label(window, text="Donate to project <3", justify="left", fg="#fd79a8", bg="#2d3436", cursor="hand2", font=("Arial", 8))
+    support_link.place(x=410,y=20,width=118,height=30)
     support_link.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/sponsors/s0md3v"))
 
+    # Face Image Window
     left_frame = tk.Frame(window)
-    left_frame.place(x=60, y=100, width=180, height=180)
-    face_label = tk.Label(left_frame)
+    left_frame.place(x=10, y=30)
+    face_label = tk.Label(left_frame, image=photo_img)
+    face_label.image = photo_img
     face_label.pack(fill='both', side='top', expand=True)
 
+    # Target Image Window
     right_frame = tk.Frame(window)
-    right_frame.place(x=360, y=100, width=180, height=180)
-    target_label = tk.Label(right_frame)
+    right_frame.place(x=210, y=30)
+    target_label = tk.Label(right_frame, image=photo_img)
+    target_label.image = photo_img
     target_label.pack(fill='both', side='top', expand=True)
+
+    img.close()
 
     # Select a face button
     face_button = create_background_button(window, "Select a face", lambda: [
         select_face(select_face_handler)
     ])
-    face_button.place(x=60,y=320,width=180,height=80)
+    face_button.place(x=10,y=290,width=192,height=30)
 
     # Select a target button
     target_button = create_background_button(window, "Select a target", lambda: [
         select_target(select_target_handler, target_path, frames_amount),
         update_slider(get_video_frame, create_test_preview, target_path.get(), frames_amount.get())
     ])
-    target_button.place(x=360,y=320,width=180,height=80)
+    target_button.place(x=210,y=290,width=192,height=30)
 
     # All faces checkbox
-    all_faces = tk.IntVar(None, initial_values['all_faces'])
+    all_faces = tk.IntVar(None, not initial_values['all_faces'])
     all_faces_checkbox = create_check(window, "Process all faces in frame", all_faces, toggle_all_faces(toggle_all_faces_handler, all_faces))
-    all_faces_checkbox.place(x=60,y=500,width=240,height=31)
+    all_faces_checkbox.place(x=410,y=175,width=155,height=25)
 
     # FPS limit checkbox
     limit_fps = tk.IntVar(None, not initial_values['keep_fps'])
     fps_checkbox = create_check(window, "Limit FPS to 30", limit_fps, toggle_fps_limit(toggle_fps_limit_handler, limit_fps))
-    fps_checkbox.place(x=60,y=475,width=240,height=31)
+    fps_checkbox.place(x=410,y=195,width=120,height=25)
 
     # Keep frames checkbox
     keep_frames = tk.IntVar(None, initial_values['keep_frames'])
     frames_checkbox = create_check(window, "Keep frames dir", keep_frames, toggle_keep_frames(toggle_keep_frames_handler, keep_frames))
-    frames_checkbox.place(x=60,y=450,width=240,height=31)
+    frames_checkbox.place(x=410,y=215,width=120,height=25)
 
     # Start button
     start_button = create_button(window, "Start", lambda: [save_file(save_file_handler, target_path.get()), preview_thread(lambda: start(update_preview))])
-    start_button.place(x=170,y=560,width=120,height=49)
+    start_button.place(x=410,y=280,width=150,height=35)
 
     # Preview button
     preview_button = create_button(window, "Preview", lambda: open_preview_window(get_video_frame, target_path.get()))
-    preview_button.place(x=310,y=560,width=120,height=49)
+    preview_button.place(x=410,y=240,width=150,height=35)
 
     # Status label
-    status_label = tk.Label(window, width=580, justify="center", text="Status: waiting for input...", fg="#2ecc71", bg="#2d3436")
-    status_label.place(x=10,y=640,width=580,height=30)
+    startup_time = int((datetime.now()-run_at).total_seconds() * 1000)
+    status_label = tk.Label(window, justify="center", text=f"Status: waiting for input...\nStartup time {startup_time}ms", fg="#2ecc71", bg="#2d3436")
+    status_label.place(x=0,y=320,width=570,height=30)
 
     return window

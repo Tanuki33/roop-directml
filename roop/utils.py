@@ -6,6 +6,11 @@ sep = "/"
 if os.name == "nt":
     sep = "\\"
 
+hwaccel_option = ''
+if roop.globals.gpu_vendor == 'nvidia':
+    hwaccel_option = '-hwaccel cuda -c:v libx264'
+elif roop.globals.gpu_vendor == 'amd':
+    hwaccel_option = '-c:v h264_amf'
 
 def path(string):
     if sep == "\\":
@@ -41,13 +46,11 @@ def set_fps(input_path, output_path, fps):
 
 
 def create_video(video_name, fps, output_dir):
-    hwaccel_option = '-hwaccel cuda' if roop.globals.gpu_vendor == 'nvidia' else ''
     output_dir = path(output_dir)
     run_ffmpeg(f'{hwaccel_option} -framerate "{fps}" -i "{output_dir}{sep}%04d.png" -c:v libx264 -crf 7 -pix_fmt yuv420p -y "{output_dir}{sep}output.mp4"')
 
 
 def extract_frames(input_path, output_dir):
-    hwaccel_option = '-hwaccel cuda' if roop.globals.gpu_vendor == 'nvidia' else ''
     input_path, output_dir = path(input_path), path(output_dir)
     run_ffmpeg(f' {hwaccel_option} -i "{input_path}" "{output_dir}{sep}%04d.png"')
 

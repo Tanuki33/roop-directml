@@ -1,13 +1,21 @@
-import platform, signal, sys, shutil, glob, argparse, os, webbrowser, psutil, cv2, threading
+import os
+import sys
+# single thread doubles performance of gpu-mode - needs to be set before torch import
+if any(arg.startswith('--gpu-vendor') or arg.startswith('--gpu') for arg in sys.argv):
+    os.environ['OMP_NUM_THREADS'] = '1'
+    print('set to single thread because using GPU.')
+import platform
+import signal
+import shutil
+import glob
+import argparse
+import psutil
 import torch
-import tkinter as tk
-import multiprocessing as mp
-from tkinter import filedialog
-from opennsfw2 import predict_video_frames, predict_image
-from tkinter.filedialog import asksaveasfilename
+import tensorflow
 from pathlib import Path
-from datetime import datetime
-from PIL import Image, ImageTk
+import multiprocessing as mp
+from opennsfw2 import predict_video_frames, predict_image
+import cv2
 
 import roop.globals
 from roop.swapper import process_video, process_img, process_faces, process_frames
@@ -26,7 +34,7 @@ parser.add_argument('--all-faces', help='swap all faces in frame', dest='all_fac
 parser.add_argument('--max-memory', help='maximum amount of RAM in GB to be used', dest='max_memory', type=int)
 parser.add_argument('--cpu-cores', help='number of CPU cores to use', dest='cpu_cores', type=int, default=max(psutil.cpu_count() / 2, 1))
 parser.add_argument('--gpu-threads', help='number of threads to be use for the GPU', dest='gpu_threads', type=int, default=8)
-parser.add_argument('--gpu-vendor', help='choice your GPU vendor', dest='gpu_vendor', choices=['apple', 'amd', 'intel', 'nvidia'])
+parser.add_argument('--gpu', '--gpu-vendor', help='choice your GPU vendor', dest='gpu_vendor', choices=['apple', 'amd', 'intel', 'nvidia'])
 
 args = parser.parse_known_args()[0]
 
@@ -56,6 +64,8 @@ sep = "/"
 if os.name == "nt":
     sep = "\\"
 
+def is_windows():
+    return str(platform.system()).lower() == 'windows'
 
 def limit_resources():
     # prevent tensorflow memory leak
@@ -64,14 +74,13 @@ def limit_resources():
         tensorflow.config.experimental.set_memory_growth(gpu, True)
     if args.max_memory:
         memory = args.max_memory * 1024 * 1024 * 1024
-        if str(platform.system()).lower() == 'windows':
+        if is_windows():
             import ctypes
             kernel32 = ctypes.windll.kernel32
             kernel32.SetProcessWorkingSetSize(-1, ctypes.c_size_t(memory), ctypes.c_size_t(memory))
         else:
             import resource
             resource.setrlimit(resource.RLIMIT_DATA, (memory, memory))
-
 
 def pre_check():
     if sys.version_info < (3, 9):
@@ -81,10 +90,27 @@ def pre_check():
     model_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '../inswapper_128.onnx')
     if not os.path.isfile(model_path):
         quit('File "inswapper_128.onnx" does not exist!')
-    if '--gpu' not in sys.argv:
-        roop.globals.providers = ['CPUExecutionProvider']
-    if '--all-faces' in sys.argv or '-a' in sys.argv:
-        roop.globals.all_faces = True
+    if roop.globals.gpu_vendor == 'apple':
+        if 'CoreMLExecutionProvider' not in roop.globals.providers:
+            quit("You are using --gpu=apple flag but CoreML isn't available or properly installed on your system.")
+    if roop.globals.gpu_vendor == 'amd':
+        if is_windows() and 'DmlExecutionProvider' not in roop.globals.providers:
+            quit("You are using --gpu=amd flag on windows but DML isn't available or properly installed on your system.")
+        elif not is_windows() and 'ROCMExecutionProvider' not in roop.globals.providers:
+            quit("You are using --gpu=amd flag but ROCM isn't available or properly installed on your system.")
+    if roop.globals.gpu_vendor == 'nvidia':
+        CUDA_VERSION = torch.version.cuda
+        CUDNN_VERSION = torch.backends.cudnn.version()
+        if not torch.cuda.is_available():
+            quit("You are using --gpu=nvidia flag but CUDA isn't available or properly installed on your system.")
+        if CUDA_VERSION > '11.8':
+            quit(f"CUDA version {CUDA_VERSION} is not supported - please downgrade to 11.8")
+        if CUDA_VERSION < '11.4':
+            quit(f"CUDA version {CUDA_VERSION} is not supported - please upgrade to 11.8")
+        if CUDNN_VERSION < 8220:
+            quit(f"CUDNN version {CUDNN_VERSION} is not supported - please upgrade to 8.9.1")
+        if CUDNN_VERSION > 8910:
+            quit(f"CUDNN version {CUDNN_VERSION} is not supported - please downgrade to 8.9.1")
 
 
 def get_video_frame(video_path, frame_number = 1):
@@ -156,7 +182,6 @@ def start(preview_callback = None):
             quit()
         process_img(args.source_img, target_path, args.output_file)
         status("swap successful!")
-        enable_button(True)
         return
     seconds, probabilities = predict_video_frames(video_path=args.target_path, frame_interval=100)
     if any(probability > 0.85 for probability in probabilities):
@@ -193,23 +218,7 @@ def start(preview_callback = None):
     save_path = args.output_file if args.output_file else output_dir + "/" + video_name + ".mp4"
     print("\n\nVideo saved as:", save_path, "\n\n")
     status("swap successful!")
-    enable_button(True)
 
-def enable_button(state):
-    if state:
-        face_button["state"] = "normal"
-        target_button["state"] = "normal"
-        start_button["state"] = "normal"
-        all_faces_checkbox["state"] = "normal"
-        fps_checkbox["state"] = "normal"
-        frames_checkbox["state"] = "normal"
-    else:
-        face_button["state"] = "disabled"
-        target_button["state"] = "disabled"
-        start_button["state"] = "disabled"
-        all_faces_checkbox["state"] = "disabled"
-        fps_checkbox["state"] = "disabled"
-        frames_checkbox["state"] = "disabled"
 
 def select_face_handler(path: str):
     args.source_img = path
